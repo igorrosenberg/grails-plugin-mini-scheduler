@@ -28,9 +28,10 @@ class ScheduledTask {
 class ExecClosureTask extends TimerTask {
         def closure
         String name
-        ExecClosureTask(name, closure) {
+        ExecClosureTask(name, serializedClosure) {
            this.name = name
-           this.closure = closure
+           this.closure = { -> println "Executing code: ${serializedClosure}" }
+
         }
         public void run() {
         	log.info "Executing Task $name"
@@ -43,7 +44,7 @@ class SchedulerService {
   def timer = new Timer()
   def timerTaskList = [:]
   
-  @PostConstruct // Service 
+  @PostConstruct 
   void postConstruct() {
     //  XXX Allow to set delay as config value
     int totalDelay = 5000   // spread start times over 5 sec.
@@ -56,17 +57,17 @@ class SchedulerService {
 
   void start(ScheduledTask scheduledTask, delay){
       log.info "Booting ${domain.name} in $delay"
-      def closure = { -> println "Executing code retrieved from DB: ${domain.code}" }
-      def task = new ExecClosureTask(domain.name, closure)
-      timer.scheduleAtFixedRate(task, delay, domain.frequency)
+      def timerTask = new ExecClosureTask(domain.name, domain.code)
+      timer.scheduleAtFixedRate(timerTask, delay, domain.frequency)
       // keep a ref on task to cancel via subsequent call
-      timerTaskList[scheduledTask.id] = scheduledTask
+      timerTaskList[scheduledTask.id] = timerTask
       domain.running = true
       domain.save()
   }
 
   void stop(ScheduledTask scheduledTask) {
-      timerTaskList[scheduledTask.id]?.cancel()
+      def timerTask = timerTaskList[scheduledTask.id]
+      timerTask?.cancel()
       domain.running = false
       domain.save()
   }
